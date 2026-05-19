@@ -254,7 +254,7 @@ if (typeof $request !== 'undefined' && $request) {
   if (!existed) store.order.push(fp);
   saveStore(store);
 
-  $notify(scriptName, existed?'🔄 账号参数已更新':'✅ 新账号已入库', alias+'（id:'+fp+'）\n当前账号总数：'+store.order.length);
+  $notification.post(scriptName, existed?'🔄 账号参数已更新':'✅ 新账号已入库', alias+'（id:'+fp+'）\n当前账号总数：'+store.order.length);
   $done({});
 
 } else {
@@ -263,7 +263,7 @@ if (typeof $request !== 'undefined' && $request) {
   var ids = store.order.filter(function(id){return !!store.accounts[id];});
 
   if (!ids.length) {
-    $notify(scriptName, '⚠️ 未抓到任何账号', '请先打开 WeTalk 触发抓包');
+    $notification.post(scriptName, '⚠️ 未抓到任何账号', '请先打开 WeTalk 触发抓包');
     $done();
   } else {
     var total = ids.length;
@@ -279,10 +279,10 @@ if (typeof $request !== 'undefined' && $request) {
       });
     });
     chain.then(function(){
-      $notify(scriptName, '🎉 全部完成 ('+total+'个账号)', results.join('\n———\n'));
+      $notification.post(scriptName, '🎉 全部完成 ('+total+'个账号)', results.join('\n———\n'));
       $done();
     }).catch(function(err){
-      $notify(scriptName, '❌ 任务异常', results.join('\n———\n')+'\n'+(err.error||String(err)));
+      $notification.post(scriptName, '❌ 任务异常', results.join('\n———\n')+'\n'+(err.error||String(err)));
       $done();
     });
   }
