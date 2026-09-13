@@ -1,4 +1,4 @@
-name: Build SideInstaller GSA 503 Fix
+name: Build SideInstaller GSA 503 + 429 Fix
 
 on:
   push:
@@ -43,6 +43,22 @@ jobs:
           PY
           grep -n -A10 -B3 "com.apple.akd" rust-core/vendor/isideload/src/anisette/remote_v3/mod.rs
 
+      - name: Stop anisette rotation on Apple HTTP 429
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("ios-app/CertManager.swift")
+          s = p.read_text()
+          marker = '                engine.log("Certificates: anisette \\(idx + 1)/\\(servers.count) failed: \\(lastError)")'
+          patch = '                if lastError.localizedCaseInsensitiveContains("429") ||\\n                   lastError.localizedCaseInsensitiveContains("Too Many Requests") {\\n                    engine.log("Apple rate limit hit (HTTP 429) — stopping anisette rotation.")\\n                    throw EngineError.message(L("Apple is temporarily rate-limiting sign-in (HTTP 429). SideInstaller stopped automatic retries. Wait a while, then try once."))\\n                }\\n'
+          if marker not in s:
+              raise SystemExit("Could not locate CertManager retry log")
+          p.write_text(s.replace(marker, patch + marker, 1))
+          print("Patched:", p)
+          PY
+          grep -n -A9 -B3 "Apple rate limit hit" ios-app/CertManager.swift
+
       - name: Install build dependencies
         shell: bash
         run: |
@@ -82,13 +98,13 @@ jobs:
           test -d "$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/SideInstaller.app
-          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-Fixed-unsigned.ipa Payload
-          shasum -a 256 SideInstaller-0.9.0-GSA503-Fixed-unsigned.ipa
+          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-429-Fixed-unsigned.ipa Payload
+          shasum -a 256 SideInstaller-0.9.0-GSA503-429-Fixed-unsigned.ipa
 
       - name: Upload patched IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SideInstaller-0.9.0-GSA503-Fixed-unsigned
-          path: SideInstaller-0.9.0-GSA503-Fixed-unsigned.ipa
+          name: SideInstaller-0.9.0-GSA503-429-Fixed-unsigned
+          path: SideInstaller-0.9.0-GSA503-429-Fixed-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
