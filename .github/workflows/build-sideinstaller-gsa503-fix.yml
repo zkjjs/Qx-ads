@@ -1,4 +1,4 @@
-name: Build SideInstaller GSA 503 + 429 Fix
+name: Build SideInstaller GSA 503 + 429 Pooling Fix
 
 on:
   push:
@@ -42,6 +42,29 @@ jobs:
           print("Patched:", p)
           PY
           grep -n -A10 -B3 "com.apple.akd" rust-core/vendor/isideload/src/anisette/remote_v3/mod.rs
+
+      - name: Apply upstream iLoader 2.3.3 GrandSlam 429 fix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("rust-core/vendor/isideload/src/auth/grandslam.rs")
+          s = p.read_text()
+          old = '''            .danger_accept_invalid_certs(debug)
+            .connection_verbose(debug)
+            .build()?;
+'''
+          new = '''            .danger_accept_invalid_certs(debug)
+            .connection_verbose(debug)
+            .pool_max_idle_per_host(0)
+            .build()?;
+'''
+          if old not in s:
+              raise SystemExit("Could not locate GrandSlam reqwest client builder")
+          p.write_text(s.replace(old, new, 1))
+          print("Patched:", p)
+          PY
+          grep -n -A6 -B3 "pool_max_idle_per_host" rust-core/vendor/isideload/src/auth/grandslam.rs
 
       - name: Stop anisette rotation on Apple HTTP 429
         shell: bash
@@ -105,13 +128,13 @@ jobs:
           test -d "$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/SideInstaller.app
-          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-429-Fixed-unsigned.ipa Payload
-          shasum -a 256 SideInstaller-0.9.0-GSA503-429-Fixed-unsigned.ipa
+          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned.ipa Payload
+          shasum -a 256 SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned.ipa
 
       - name: Upload patched IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SideInstaller-0.9.0-GSA503-429-Fixed-unsigned
-          path: SideInstaller-0.9.0-GSA503-429-Fixed-unsigned.ipa
+          name: SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned
+          path: SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
