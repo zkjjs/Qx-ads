@@ -51,12 +51,14 @@ jobs:
           p = Path("ios-app/CertManager.swift")
           s = p.read_text()
           marker = '                engine.log("Certificates: anisette \\(idx + 1)/\\(servers.count) failed: \\(lastError)")'
-          patch = """                if lastError.localizedCaseInsensitiveContains("429") ||
-                   lastError.localizedCaseInsensitiveContains("Too Many Requests") {
-                    engine.log("Apple rate limit hit (HTTP 429) — stopping anisette rotation.")
-                    throw EngineError.message(L("Apple is temporarily rate-limiting sign-in (HTTP 429). SideInstaller stopped automatic retries. Wait a while, then try once."))
-                }
-"""
+          patch = "\n".join([
+              '                if lastError.localizedCaseInsensitiveContains("429") ||',
+              '                   lastError.localizedCaseInsensitiveContains("Too Many Requests") {',
+              '                    engine.log("Apple rate limit hit (HTTP 429) — stopping anisette rotation.")',
+              '                    throw EngineError.message(L("Apple is temporarily rate-limiting sign-in (HTTP 429). SideInstaller stopped automatic retries. Wait a while, then try once."))',
+              '                }',
+              ''
+          ])
           if marker not in s:
               raise SystemExit("Could not locate CertManager retry log")
           p.write_text(s.replace(marker, patch + marker, 1))
