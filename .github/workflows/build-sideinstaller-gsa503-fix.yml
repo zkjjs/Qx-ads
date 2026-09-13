@@ -1,0 +1,94 @@
+name: Build SideInstaller GSA 503 Fix
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build-sideinstaller-gsa503-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout SideInstaller v0.9.0
+        uses: actions/checkout@v4
+        with:
+          repository: FrizzleM/SideInstaller
+          ref: v0.9.0
+          fetch-depth: 1
+
+      - name: Patch Apple GSA 503 client info
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("rust-core/vendor/isideload/src/anisette/remote_v3/mod.rs")
+          s = p.read_text()
+          old1 = "                let resp = self\n                    .client\n                    .get(format!(\"{}/v3/client_info\", self.url))"
+          new1 = "                let mut resp = self\n                    .client\n                    .get(format!(\"{}/v3/client_info\", self.url))"
+          if old1 not in s:
+              raise SystemExit("Could not locate v0.9.0 client_info request")
+          s = s.replace(old1, new1, 1)
+          marker = "                self.client_info = Some(resp.clone());"
+          patch = "                // Apple GSA rejects X-Mme-Client-Info values identifying Xcode.\n                // Preserve server metadata, but normalize the blocked client token.\n                if let Some(start) = resp.client_info.find(\"(com.apple.dt.Xcode/\") {\n                    if let Some(rel_end) = resp.client_info[start..].find(')') {\n                        let end = start + rel_end + 1;\n                        resp.client_info.replace_range(start..end, \"(com.apple.akd/1.0)\");\n                    }\n                }\n\n"
+          if marker not in s:
+              raise SystemExit("Could not locate v0.9.0 client_info assignment")
+          s = s.replace(marker, patch + marker, 1)
+          p.write_text(s)
+          print("Patched:", p)
+          PY
+          grep -n -A10 -B3 "com.apple.akd" rust-core/vendor/isideload/src/anisette/remote_v3/mod.rs
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          rustup target add aarch64-apple-ios
+
+      - name: Build device Rust core only
+        shell: bash
+        run: |
+          export IPHONEOS_DEPLOYMENT_TARGET=17.4
+          cd rust-core
+          cargo build --release --target aarch64-apple-ios
+          cd ..
+          rm -rf SideInstallerFFI.xcframework
+          xcodebuild -create-xcframework \
+            -library rust-core/target/aarch64-apple-ios/release/libsideinstaller_ffi.a \
+            -headers rust-core/include \
+            -output SideInstallerFFI.xcframework
+
+      - name: Build unsigned SideInstaller IPA
+        shell: bash
+        run: |
+          xcodegen generate
+          rm -rf build Payload
+          xcodebuild \
+            -project SideInstaller.xcodeproj \
+            -scheme SideInstaller \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+          APP="build/DerivedData/Build/Products/Release-iphoneos/SideInstaller.app"
+          test -d "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/SideInstaller.app
+          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-Fixed-unsigned.ipa Payload
+          shasum -a 256 SideInstaller-0.9.0-GSA503-Fixed-unsigned.ipa
+
+      - name: Upload patched IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SideInstaller-0.9.0-GSA503-Fixed-unsigned
+          path: SideInstaller-0.9.0-GSA503-Fixed-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
