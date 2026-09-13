@@ -1,4 +1,4 @@
-name: Build SideInstaller GSA 503 + 429 Pooling Fix
+name: Build SideInstaller GSA 503 + 429 + ClashMi Fix
 
 on:
   push:
@@ -89,6 +89,14 @@ jobs:
           PY
           grep -n -A9 -B3 "Apple rate limit hit" ios-app/CertManager.swift
 
+      - name: Backport route-aware ClashMi tunnel detection
+        shell: bash
+        run: |
+          git fetch origin main --depth=1
+          git show FETCH_HEAD:ios-app/NetworkStatus.swift > ios-app/NetworkStatus.swift
+          grep -n "tunnelCarriesRoute" ios-app/NetworkStatus.swift
+          grep -n "routeSource" ios-app/NetworkStatus.swift
+
       - name: Install build dependencies
         shell: bash
         run: |
@@ -128,13 +136,13 @@ jobs:
           test -d "$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/SideInstaller.app
-          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned.ipa Payload
-          shasum -a 256 SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned.ipa
+          /usr/bin/zip -qry SideInstaller-0.9.0-GSA503-429-ClashMi-Fixed-unsigned.ipa Payload
+          shasum -a 256 SideInstaller-0.9.0-GSA503-429-ClashMi-Fixed-unsigned.ipa
 
       - name: Upload patched IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned
-          path: SideInstaller-0.9.0-GSA503-429-Pooling-Fixed-unsigned.ipa
+          name: SideInstaller-0.9.0-GSA503-429-ClashMi-Fixed-unsigned
+          path: SideInstaller-0.9.0-GSA503-429-ClashMi-Fixed-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
